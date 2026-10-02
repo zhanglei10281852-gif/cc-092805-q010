@@ -95,6 +95,37 @@ def command_mortuary_demo() -> int:
     return 0 if case.status_code in {201, 409} and resource.status_code in {201, 409} and cases.status_code == 200 and resources.status_code == 200 else 1
 
 
+def command_preneed_demo() -> int:
+    payload = {
+        "contract_no": "PN-CLI-001",
+        "plan_code": "PEACE-A",
+        "plan_name": "安宁套餐甲",
+        "customer_name": "演示客户",
+        "customer_phone": "13900000000",
+        "beneficiary_name": "演示受益人",
+        "items": [
+            {"service_code": "body-care", "service_name": "遗体护理", "quantity": 1, "unit_price_cents": 180000},
+            {"service_code": "farewell-hall", "service_name": "送别厅", "quantity": 1, "unit_price_cents": 120000},
+        ],
+        "price_basis": {"price_list": "2026版"},
+        "installments": [
+            {"period_no": 1, "due_date": "2026-11-01", "amount_cents": 150000},
+            {"period_no": 2, "due_date": "2027-01-01", "amount_cents": 150000},
+        ],
+        "signed_by": "cli-sales",
+    }
+    with TestClient(app) as client:
+        created = client.post(
+            "/api/preneed/contracts?actor=cli-sales&role=preneed_clerk", json=payload)
+        if created.status_code not in {201, 409}:
+            print(created.text)
+            return 1
+        contracts = client.get("/api/preneed/contracts")
+    result = {"contract_status": created.status_code, "contracts": len(contracts.json())}
+    print(json.dumps(result, ensure_ascii=False))
+    return 0 if created.status_code in {201, 409} and contracts.status_code == 200 else 1
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(prog="peaceful-care-operations", description="安宁礼仪与公墓运营服务维护入口")
     subparsers = parser.add_subparsers(dest="command", required=True)
@@ -103,8 +134,16 @@ def main() -> int:
     subparsers.add_parser("smoke", help="执行本地 API 冒烟检查")
     subparsers.add_parser("compute-demo", help="执行计算任务提交与领取演示")
     subparsers.add_parser("mortuary-demo", help="执行殡葬业务 API 冒烟检查")
+    subparsers.add_parser("preneed-demo", help="执行生前契约 API 冒烟检查")
     args = parser.parse_args()
-    return {"init-db": command_init, "check-db": command_check, "smoke": command_smoke, "compute-demo": command_compute_demo, "mortuary-demo": command_mortuary_demo}[args.command]()
+    return {
+        "init-db": command_init,
+        "check-db": command_check,
+        "smoke": command_smoke,
+        "compute-demo": command_compute_demo,
+        "mortuary-demo": command_mortuary_demo,
+        "preneed-demo": command_preneed_demo,
+    }[args.command]()
 
 
 if __name__ == "__main__":
