@@ -14,7 +14,7 @@
 
 ## 初始化与启动
 
-先执行 python -m app.cli init-db 和 python -m app.cli check-db，再用 uvicorn app.main:app --host 0.0.0.0 --port 8432 启动。健康检查为 GET /api/system/health。殡葬业务接口位于 /api/mortuary，涵盖档案、交接、资源、预约、服务订单、墓位权属、账单和时间线。
+先执行 python -m app.cli init-db 和 python -m app.cli check-db，再用 uvicorn app.main:app --host 0.0.0.0 --port 8432 启动。健康检查为 GET /api/system/health。殡葬业务接口位于 /api/mortuary，涵盖档案、交接、资源、预约、服务订单、墓位权属、账单和时间线。生前契约接口位于 /api/preneed，覆盖签约冻结、分期收款、版本变更、逾期暂停解除转让，以及受益人死亡后向业务档案的转换。
 
 ## 测试与编译检查
 
@@ -22,11 +22,12 @@
 
 编译命令：python -m compileall -q app tests
 
-API 与 CLI 冒烟命令：python -m app.cli smoke、python -m app.cli mortuary-demo
+API 与 CLI 冒烟命令：python -m app.cli smoke、python -m app.cli mortuary-demo、python -m app.cli preneed-demo
 
 ## 目录结构
 
 - app/mortuary：档案、保管交接、资源排程、权属和账单领域
+- app/preneed：生前契约签约、版本、分期资金、状态机与身后转换领域
 - app/api：登录、角色、审计及系统管理接口
 - app/core：时钟、安全、异常、隐私与分页能力
 - app/repositories：通用身份和审计数据访问
@@ -36,3 +37,5 @@ API 与 CLI 冒烟命令：python -m app.cli smoke、python -m app.cli mortuary-
 ## 一致性约定
 
 SQLite 连接启用外键、WAL、忙等待和即时事务。业务档案采用外部编号去重，保管交接与预约保留幂等键，服务订单开票后不可再次开票，支付流水不能重复分配。关键状态变化同时写入领域时间线；会话令牌仅保存摘要，审计记录不会保存明文密码或令牌。
+
+生前契约在签约时冻结服务清单、数量、单价与价目表版本；每次变更生成新版本行，经客户确认后才生效，旧版本标记为 superseded 但永久保留，拒绝的版本标记为 rejected。分期按版本保存，收款流水与退款流水均以外部单号唯一去重；逾期由巡检任务在超过宽限期后标记并生成备忘会计事件，补缴后自动恢复。暂停、解除（仅财务经理并按退款规则计算可退金额）、受益人转让（留存前后受益人与客户确认）各有独立权限矩阵。所有会计事件借贷平衡，并以 (契约,事件,发生键) 防重复记账。只有受益人死亡后，处于有效状态的契约才能凭幂等键转换为业务档案、按冻结价格生成服务订单与账单；转换防重复，已收资金抵扣账单、未收余额保留为应收。GET /contracts/{id}/as-of 可回放任一时点的状态、生效版本、合同责任、资金差额与下一步动作。
